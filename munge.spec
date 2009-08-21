@@ -5,7 +5,7 @@
 
 Name:           munge
 Version:        0.5.8
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
@@ -182,6 +182,9 @@ exit 0
 
 
 %changelog
+* Fri Aug 21 2009 Tomas Mraz <tmraz@redhat.com> - 0.5.8-5
+- rebuilt with new openssl
+
 * Thu Jul 22 2009 Steve Traylen <steve.traylen@cern.ch> - 0.5.8-4
 - Expand defattr with 4th argument for default directory perms.
 - Explict attr for non 0644 files and 0755 directories.
