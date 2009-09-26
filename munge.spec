@@ -5,7 +5,7 @@
 
 Name:           munge
 Version:        0.5.8
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
@@ -18,6 +18,10 @@ Patch0:         initd-pass-rpmlint.patch
 Patch2:         runas-munge-user.patch
 Patch3:         check-key-exists.patch
 Patch4:         remove-GPL_LICENSED-cpp.patch
+# Was loading /etc/sysconfig/munge wrongly on reboot.
+# https://bugzilla.redhat.com/show_bug.cgi?id=525732
+# Fixed upstream already for next release.
+Patch5:         %{name}-correct-service-name.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 BuildRequires:  zlib-devel bzip2-devel openssl-devel
@@ -53,6 +57,7 @@ Header files for developing using MUNGE.
 %patch2 -p1
 %patch3 -p1
 %patch4 -p1
+%patch5 -p1
 
 
 %build
@@ -88,13 +93,14 @@ install -p -D -m 644 %{SOURCE2} $RPM_BUILD_ROOT/%{_sysconfdir}/logrotate.d/munge
 chmod 700 $RPM_BUILD_ROOT%{_var}/lib/munge $RPM_BUILD_ROOT%{_var}/log/munge
 chmod 700 $RPM_BUILD_ROOT%{_sysconfdir}/munge
 
-# Create and empty key file to be marked as a ghost file below.
+# Create and empty key file and pid file to be marked as a ghost file below.
 # i.e it is not actually included in the rpm, only the record 
 # of it is.
 # Can't be done on .el4 or .el5.
 %if ! 0%{?el4}%{?el5}
-touch $RPM_BUILD_ROOT%{_sysconfdir}/munge/munge.key
-chmod 400 $RPM_BUILD_ROOT%{_sysconfdir}/munge/munge.key
+touch $RPM_BUILD_ROOT%{_sysconfdir}/%{name}/%{name}.key
+chmod 400 $RPM_BUILD_ROOT%{_sysconfdir}/%{name}/%{name}.key
+touch $RPM_BUILD_ROOT%{_var}/run/%{name}/%{name}d.pid
 %endif
 
 %clean
@@ -142,11 +148,12 @@ exit 0
 %{_libdir}/libmunge.so.2
 %{_libdir}/libmunge.so.2.0.0
 
-%attr(0700,munge,munge) %dir  %{_var}/run/munge
+%attr(-,munge,munge) %dir  %{_var}/run/munge
 %attr(0700,munge,munge) %dir  %{_var}/log/munge
 %attr(0700,munge,munge) %dir %{_sysconfdir}/munge
 %if ! 0%{?el4}%{?el5}
 %attr(0400,munge,munge) %ghost %{_sysconfdir}/%{name}/%{name}.key
+%attr(-,munge,munge)    %ghost %{_var}/run/%{name}/%{name}d.pid
 %endif
 
 %attr(0700,munge,munge) %dir  %{_var}/lib/munge
@@ -182,6 +189,12 @@ exit 0
 
 
 %changelog
+* Sat Sep 26 2009 Steve Traylen <steve.traylen@cern.ch> - 0.5.8-6
+- Patch for rhbz #525732 - Loads /etc/sysconfig/munge 
+  correctly.
+- Mark pid file as ghost file on oses that support that.
+- Permisions on pid directory to 755
+
 * Fri Aug 21 2009 Tomas Mraz <tmraz@redhat.com> - 0.5.8-5
 - rebuilt with new openssl
 
