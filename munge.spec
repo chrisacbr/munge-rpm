@@ -5,7 +5,7 @@
 
 Name:           munge
 Version:        0.5.8
-Release:        7%{?dist}
+Release:        8%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
@@ -19,16 +19,17 @@ Patch2:         runas-munge-user.patch
 Patch3:         check-key-exists.patch
 Patch4:         remove-GPL_LICENSED-cpp.patch
 # Was loading /etc/sysconfig/munge wrongly on reboot.
-# https://bugzilla.redhat.com/show_bug.cgi?id=525732
 # Fixed upstream already for next release.
+# https://bugzilla.redhat.com/show_bug.cgi?id=525732
 Patch5:         %{name}-correct-service-name.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 BuildRequires:  zlib-devel bzip2-devel openssl-devel
+Requires:       munge-libs = %{version}-%{release}
 
-Requires(post): chkconfig
-Requires(pre): shadow-utils
-Requires(preun): chkconfig, initscripts
+Requires(post):   chkconfig
+Requires(pre):    shadow-utils
+Requires(preun):  chkconfig, initscripts
 Requires(postun): initscripts
 
 
@@ -44,16 +45,16 @@ without the use of root privileges, reserved ports, or platform-specific
 methods.
 
 %package devel
-Summary: Development files for uid * gid authentication acrosss a host cluster
-Group: Applications/System
+Summary:        Development files for uid * gid authentication acrosss a host cluster
+Group:          Applications/System
+Requires:       munge-libs = %{version}-%{release}
 
 %description devel
 Header files for developing using MUNGE.
 
 %package libs
-Summary: Runtime libs for uid * gid authentication acrosss a host cluster
-Requires: %{name} = %{version}-%{release}
-Group: Applications/System
+Summary:        Runtime libs for uid * gid authentication acrosss a host cluster
+Group:          Applications/System
 
 %description libs
 Runtime libraries for using MUNGE.
@@ -167,7 +168,7 @@ exit 0
 %config(noreplace) %{_sysconfdir}/sysconfig/munge
 %config(noreplace) %{_sysconfdir}/logrotate.d/munge
 
-%doc AUTHORS BUGS ChangeLog COPYING DISCLAIMER   
+%doc AUTHORS BUGS ChangeLog DISCLAIMER   
 %doc JARGON META NEWS QUICKSTART README 
 %doc doc
 
@@ -175,6 +176,7 @@ exit 0
 %defattr(-,root,root,-)
 %{_libdir}/libmunge.so.2
 %{_libdir}/libmunge.so.2.0.0
+%doc COPYING
 
 %files devel
 %defattr(-,root,root,-)
@@ -198,6 +200,10 @@ exit 0
 
 
 %changelog
+* Wed Oct 21 2009 Steve Traylen <steve.traylen@cern.ch> - 0.5.8-8
+- Requirment on munge removed from munge-libs.
+- Explicit exact requirment on munge-libs for munge and munge-devel
+  added.
 * Wed Oct 21 2009 Steve Traylen <steve.traylen@cern.ch> - 0.5.8-7
 - rhbz#530128 Move runtime libs to a new -libs package.
   ldconfig moved to new -libs package as a result.
