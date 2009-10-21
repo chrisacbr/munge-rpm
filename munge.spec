@@ -5,7 +5,7 @@
 
 Name:           munge
 Version:        0.5.8
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
@@ -45,11 +45,19 @@ methods.
 
 %package devel
 Summary: Development files for uid * gid authentication acrosss a host cluster
-Requires: %{name} = %{version}-%{release}
 Group: Applications/System
 
 %description devel
 Header files for developing using MUNGE.
+
+%package libs
+Summary: Runtime libs for uid * gid authentication acrosss a host cluster
+Requires: %{name} = %{version}-%{release}
+Group: Applications/System
+
+%description libs
+Runtime libraries for using MUNGE.
+
 
 %prep
 %setup -q
@@ -107,7 +115,6 @@ touch $RPM_BUILD_ROOT%{_var}/run/%{name}/%{name}d.pid
 rm -rf $RPM_BUILD_ROOT
 
 %postun 
-/sbin/ldconfig
 if [ "$1" -ge "1" ] ; then
     /sbin/service munge condrestart >/dev/null 2>&1 || :
 fi
@@ -129,8 +136,9 @@ exit 0
 
 %post
 /sbin/chkconfig --add munge || :
-/sbin/ldconfig
 
+%post   libs -p /sbin/ldconfig
+%postun libs -p /sbin/ldconfig
 
 %files
 %defattr(-,root,root,-)
@@ -145,8 +153,6 @@ exit 0
 %{_mandir}/man1/unmunge.1.gz
 %{_mandir}/man7/munge.7.gz
 %{_mandir}/man8/munged.8.gz
-%{_libdir}/libmunge.so.2
-%{_libdir}/libmunge.so.2.0.0
 
 %attr(-,munge,munge) %dir  %{_var}/run/munge
 %attr(0700,munge,munge) %dir  %{_var}/log/munge
@@ -165,7 +171,10 @@ exit 0
 %doc JARGON META NEWS QUICKSTART README 
 %doc doc
 
-
+%files libs
+%defattr(-,root,root,-)
+%{_libdir}/libmunge.so.2
+%{_libdir}/libmunge.so.2.0.0
 
 %files devel
 %defattr(-,root,root,-)
@@ -189,6 +198,9 @@ exit 0
 
 
 %changelog
+* Wed Oct 21 2009 Steve Traylen <steve.traylen@cern.ch> - 0.5.8-7
+- rhbz#530128 Move runtime libs to a new -libs package.
+  ldconfig moved to new -libs package as a result.
 * Sat Sep 26 2009 Steve Traylen <steve.traylen@cern.ch> - 0.5.8-6
 - Patch for rhbz #525732 - Loads /etc/sysconfig/munge 
   correctly.
