@@ -4,8 +4,8 @@
 %endif
 
 Name:           munge
-Version:        0.5.8
-Release:        8%{?dist}
+Version:        0.5.9
+Release:        1%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
@@ -200,6 +200,8 @@ exit 0
 
 
 %changelog
+* Fri Mar 26 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-1
+- New upstream 0.5.9
 * Wed Oct 21 2009 Steve Traylen <steve.traylen@cern.ch> - 0.5.8-8
 - Requirment on munge removed from munge-libs.
 - Explicit exact requirment on munge-libs for munge and munge-devel
