@@ -5,7 +5,7 @@
 
 Name:           munge
 Version:        0.5.9
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
@@ -14,10 +14,7 @@ URL:            http://home.gna.org/munge/
 Source0:        http://download.gna.org/munge/%{version}/munge-%{version}.tar.bz2
 Source1:        create-munge-key
 Source2:        munge.logrotate
-Patch0:         initd-pass-rpmlint.patch
 Patch2:         runas-munge-user.patch
-Patch3:         check-key-exists.patch
-Patch4:         remove-GPL_LICENSED-cpp.patch
 # Was loading /etc/sysconfig/munge wrongly on reboot.
 # Fixed upstream already for next release.
 # https://bugzilla.redhat.com/show_bug.cgi?id=525732
@@ -62,11 +59,7 @@ Runtime libraries for using MUNGE.
 
 %prep
 %setup -q
-%patch0 -p1
 %patch2 -p1
-%patch3 -p1
-%patch4 -p1
-%patch5 -p1
 
 
 %build
@@ -200,6 +193,9 @@ exit 0
 
 
 %changelog
+* Fri Mar 26 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-2
+- Remove initd-pass-rpmlint.patch, has been applied upstream.
+- Remove remove-GPL_LICENSED-cpp.patch, has been applied upstream.
 * Fri Mar 26 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-1
 - New upstream 0.5.9
 * Wed Oct 21 2009 Steve Traylen <steve.traylen@cern.ch> - 0.5.8-8
