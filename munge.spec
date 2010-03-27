@@ -5,7 +5,7 @@
 
 Name:           munge
 Version:        0.5.9
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
@@ -161,7 +161,7 @@ exit 0
 %config(noreplace) %{_sysconfdir}/sysconfig/munge
 %config(noreplace) %{_sysconfdir}/logrotate.d/munge
 
-%doc AUTHORS BUGS ChangeLog DISCLAIMER   
+%doc AUTHORS BUGS ChangeLog    
 %doc JARGON META NEWS QUICKSTART README 
 %doc doc
 
@@ -193,6 +193,8 @@ exit 0
 
 
 %changelog
+* Sat Mar 27 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-3
+- Release Bump
 * Fri Mar 26 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-2
 - Remove initd-pass-rpmlint.patch, has been applied upstream.
 - Remove remove-GPL_LICENSED-cpp.patch, has been applied upstream.
