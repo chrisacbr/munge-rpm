@@ -5,13 +5,13 @@
 
 Name:           munge
 Version:        0.5.9
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
 License:        GPLv2+
-URL:            http://home.gna.org/munge/
-Source0:        http://download.gna.org/munge/%{version}/munge-%{version}.tar.bz2
+URL:            http://munge.googlecode.com/
+Source0:        http://munge.googlecode.com/files/munge-%{version}.tar.bz2
 Source1:        create-munge-key
 Source2:        munge.logrotate
 Patch2:         runas-munge-user.patch
@@ -148,7 +148,9 @@ exit 0
 %{_mandir}/man7/munge.7.gz
 %{_mandir}/man8/munged.8.gz
 
-%attr(-,munge,munge) %dir  %{_var}/run/munge
+%if ! 0%{?el4}%{?el5}
+%attr(-,munge,munge) %ghost %dir  %{_var}/run/munge
+%endif
 %attr(0700,munge,munge) %dir  %{_var}/log/munge
 %attr(0700,munge,munge) %dir %{_sysconfdir}/munge
 %if ! 0%{?el4}%{?el5}
@@ -193,6 +195,10 @@ exit 0
 
 
 %changelog
+* Tue Dec 7 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-4
+- Upsteam is now hosted on google.
+- Mark /var/run/munge as a %ghost file. #656631
+
 * Sat Mar 27 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-3
 - Release Bump
 * Fri Mar 26 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-2
