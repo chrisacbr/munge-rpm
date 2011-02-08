@@ -5,7 +5,7 @@
 
 Name:           munge
 Version:        0.5.9
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
@@ -195,6 +195,9 @@ exit 0
 
 
 %changelog
+* Tue Feb 08 2011 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.5.9-5
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_15_Mass_Rebuild
+
 * Tue Dec 7 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-4
 - Upsteam is now hosted on google.
 - Mark /var/run/munge as a %ghost file. #656631
