@@ -21,8 +21,8 @@ Patch2:         runas-munge-user.patch
 Patch5:         %{name}-correct-service-name.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildRequires:  zlib-devel bzip2-devel openssl-devel
-Requires:       munge-libs = %{version}-%{release}
+BuildRequires:  zlib-devel%{?_isa} bzip2-devel%{?_isa} openssl-devel%{?_isa}
+Requires:       munge-libs%{?_isa} = %{version}-%{release}
 
 Requires(post):   chkconfig
 Requires(pre):    shadow-utils
@@ -44,7 +44,7 @@ methods.
 %package devel
 Summary:        Development files for uid * gid authentication acrosss a host cluster
 Group:          Applications/System
-Requires:       munge-libs = %{version}-%{release}
+Requires:       munge-libs%{?_isa} = %{version}-%{release}
 
 %description devel
 Header files for developing using MUNGE.
@@ -197,6 +197,7 @@ exit 0
 %changelog
 * Sun Feb 27 2011 Steve Traylen <steve.traylen@cern.ch> - 0.5.10-1
 - Upstream to 0.5.10
+- Add _isa tags to all build requires.
 
 * Tue Feb 08 2011 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.5.9-5
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_15_Mass_Rebuild
