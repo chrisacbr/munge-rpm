@@ -15,10 +15,6 @@ Source0:        http://munge.googlecode.com/files/munge-%{version}.tar.bz2
 Source1:        create-munge-key
 Source2:        munge.logrotate
 Patch2:         runas-munge-user.patch
-# Was loading /etc/sysconfig/munge wrongly on reboot.
-# Fixed upstream already for next release.
-# https://bugzilla.redhat.com/show_bug.cgi?id=525732
-Patch5:         %{name}-correct-service-name.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 BuildRequires:  zlib-devel%{?_isa} bzip2-devel%{?_isa} openssl-devel%{?_isa}
@@ -198,6 +194,7 @@ exit 0
 * Sun Feb 27 2011 Steve Traylen <steve.traylen@cern.ch> - 0.5.10-1
 - Upstream to 0.5.10
 - Add _isa tags to all build requires.
+- Remove unused patch munge-correct-service-name.patch, upstream fixed.
 
 * Tue Feb 08 2011 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.5.9-5
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_15_Mass_Rebuild
