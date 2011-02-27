@@ -4,25 +4,24 @@
 %endif
 
 Name:           munge
-Version:        0.5.9
-Release:        3%{?dist}
+Version:        0.5.10
+Release:        1%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
 License:        GPLv2+
-URL:            http://home.gna.org/munge/
-Source0:        http://download.gna.org/munge/%{version}/munge-%{version}.tar.bz2
+URL:            http://munge.googlecode.com/
+Source0:        http://munge.googlecode.com/files/munge-%{version}.tar.bz2
 Source1:        create-munge-key
 Source2:        munge.logrotate
+# Check the key exists in the init.d script rather than failing 
+Patch1:         check-key-exists.patch
+# Run as munge rather than deamon.
 Patch2:         runas-munge-user.patch
-# Was loading /etc/sysconfig/munge wrongly on reboot.
-# Fixed upstream already for next release.
-# https://bugzilla.redhat.com/show_bug.cgi?id=525732
-Patch5:         %{name}-correct-service-name.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildRequires:  zlib-devel bzip2-devel openssl-devel
-Requires:       munge-libs = %{version}-%{release}
+BuildRequires:  zlib-devel%{?_isa} bzip2-devel%{?_isa} openssl-devel%{?_isa}
+Requires:       munge-libs%{?_isa} = %{version}-%{release}
 
 Requires(post):   chkconfig
 Requires(pre):    shadow-utils
@@ -44,7 +43,7 @@ methods.
 %package devel
 Summary:        Development files for uid * gid authentication acrosss a host cluster
 Group:          Applications/System
-Requires:       munge-libs = %{version}-%{release}
+Requires:       munge-libs%{?_isa} = %{version}-%{release}
 
 %description devel
 Header files for developing using MUNGE.
@@ -59,15 +58,11 @@ Runtime libraries for using MUNGE.
 
 %prep
 %setup -q
+%patch1 -p1
 %patch2 -p1
 
 
 %build
-# Won't compile without -DGNU_SOURCE on fc11,12 at least.
-%if ! 0%{?el4}%{?el5}
-  export CFLAGS="%{optflags} -D_GNU_SOURCE"
-%endif
-
 %configure  --disable-static
 # Get rid of some rpaths for /usr/sbin
 sed -i 's|^hardcode_libdir_flag_spec=.*|hardcode_libdir_flag_spec=""|g' libtool
@@ -148,7 +143,9 @@ exit 0
 %{_mandir}/man7/munge.7.gz
 %{_mandir}/man8/munged.8.gz
 
-%attr(-,munge,munge) %dir  %{_var}/run/munge
+%if ! 0%{?el4}%{?el5}
+%attr(-,munge,munge) %ghost %dir  %{_var}/run/munge
+%endif
 %attr(0700,munge,munge) %dir  %{_var}/log/munge
 %attr(0700,munge,munge) %dir %{_sysconfdir}/munge
 %if ! 0%{?el4}%{?el5}
@@ -193,6 +190,17 @@ exit 0
 
 
 %changelog
+* Sun Feb 27 2011 Steve Traylen <steve.traylen@cern.ch> - 0.5.10-1
+- Upstream to 0.5.10
+- Add _isa tags to all build requires.
+- Remove unused patch munge-correct-service-name.patch, upstream fixed.
+- Update and add check-key-exists.patch back.
+- Revert back to default CFLAGS. _GNU_SOURCE not needed any more.
+
+* Tue Dec 7 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-4
+- Upsteam is now hosted on google.
+- Mark /var/run/munge as a %ghost file. #656631
+
 * Sat Mar 27 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-3
 - Release Bump
 * Fri Mar 26 2010 Steve Traylen <steve.traylen@cern.ch> - 0.5.9-2
