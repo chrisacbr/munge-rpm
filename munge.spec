@@ -63,11 +63,6 @@ Runtime libraries for using MUNGE.
 
 
 %build
-# Won't compile without -DGNU_SOURCE on fc11,12 at least.
-%if ! 0%{?el4}%{?el5}
-  export CFLAGS="%{optflags} -D_GNU_SOURCE"
-%endif
-
 %configure  --disable-static
 # Get rid of some rpaths for /usr/sbin
 sed -i 's|^hardcode_libdir_flag_spec=.*|hardcode_libdir_flag_spec=""|g' libtool
@@ -200,6 +195,7 @@ exit 0
 - Add _isa tags to all build requires.
 - Remove unused patch munge-correct-service-name.patch, upstream fixed.
 - Update and add check-key-exists.patch back.
+- Revert back to default CFLAGS. _GNU_SOURCE not needed any more.
 
 * Tue Feb 08 2011 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.5.9-5
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_15_Mass_Rebuild
