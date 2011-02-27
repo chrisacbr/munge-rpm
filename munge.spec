@@ -14,6 +14,9 @@ URL:            http://munge.googlecode.com/
 Source0:        http://munge.googlecode.com/files/munge-%{version}.tar.bz2
 Source1:        create-munge-key
 Source2:        munge.logrotate
+# Check the key exists in the init.d script rather than failing 
+Patch1:         check-key-exists.patch
+# Run as munge rather than deamon.
 Patch2:         runas-munge-user.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
@@ -55,6 +58,7 @@ Runtime libraries for using MUNGE.
 
 %prep
 %setup -q
+%patch1 -p1
 %patch2 -p1
 
 
@@ -195,6 +199,7 @@ exit 0
 - Upstream to 0.5.10
 - Add _isa tags to all build requires.
 - Remove unused patch munge-correct-service-name.patch, upstream fixed.
+- Update and add check-key-exists.patch back.
 
 * Tue Feb 08 2011 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.5.9-5
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_15_Mass_Rebuild
