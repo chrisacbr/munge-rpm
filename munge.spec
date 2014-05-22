@@ -5,7 +5,7 @@
 
 Name:           munge
 Version:        0.5.10
-Release:        1%{?dist}
+Release:        1.1%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
@@ -18,6 +18,8 @@ Source2:        munge.logrotate
 Patch1:         check-key-exists.patch
 # Run as munge rather than deamon.
 Patch2:         runas-munge-user.patch
+# Multiple realms with different keys.
+Patch3:         multi-realms.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 BuildRequires:  zlib-devel%{?_isa} bzip2-devel%{?_isa} openssl-devel%{?_isa}
@@ -60,6 +62,7 @@ Runtime libraries for using MUNGE.
 %setup -q
 %patch1 -p1
 %patch2 -p1
+%patch3 -p1
 
 
 %build
@@ -190,6 +193,9 @@ exit 0
 
 
 %changelog
+* Thu May 22 2014 Chris Allen <chris.allen@anu.edu.au> - 0.5.10-1.1
+- Patched to support multiple realms with different keys.
+
 * Sun Feb 27 2011 Steve Traylen <steve.traylen@cern.ch> - 0.5.10-1
 - Upstream to 0.5.10
 - Add _isa tags to all build requires.

@@ -1,0 +1,794 @@
+diff -uNr munge-0.5.10.ORIG/src/munge/munge.1.in munge-0.5.10/src/munge/munge.1.in
+--- munge-0.5.10.ORIG/src/munge/munge.1.in	2011-01-20 12:54:21.000000000 +1100
++++ munge-0.5.10/src/munge/munge.1.in	2014-05-22 12:20:56.230857431 +1000
+@@ -106,6 +106,11 @@
+ .TP
+ .BI "-S, --socket " path
+ Specify the local domain socket for connecting with \fBmunged\fR.
++.TP
++.BI "-R, --realm " name
++Selects a specific realm and therefore key to use when encoding the
++credential.  Otherwise the default realm configured in \fBmunged\fR is
++used.
+ 
+ .SH "EXIT STATUS"
+ The \fBmunge\fR program returns a zero exit code when the credential is
+diff -uNr munge-0.5.10.ORIG/src/munge/munge.c munge-0.5.10/src/munge/munge.c
+--- munge-0.5.10.ORIG/src/munge/munge.c	2011-01-20 12:54:21.000000000 +1100
++++ munge-0.5.10/src/munge/munge.c	2014-05-22 12:20:56.230857431 +1000
+@@ -54,7 +54,7 @@
+  *  Command-Line Options
+  *****************************************************************************/
+ 
+-const char * const short_opts = ":hLVns:i:o:c:Cm:Mz:Zu:g:t:S:";
++const char * const short_opts = ":hLVns:i:o:c:Cm:Mz:Zu:g:t:S:R:";
+ 
+ #include <getopt.h>
+ struct option long_opts[] = {
+@@ -75,6 +75,7 @@
+     { "restrict-gid", required_argument, NULL, 'g' },
+     { "ttl",          required_argument, NULL, 't' },
+     { "socket",       required_argument, NULL, 'S' },
++    { "realm",        required_argument, NULL, 'R' },
+     {  NULL,          0,                 NULL,  0  }
+ };
+ 
+@@ -401,6 +402,14 @@
+                         munge_ctx_strerror (conf->ctx));
+                 }
+                 break;
++            case 'R':
++                e = munge_ctx_set (conf->ctx, MUNGE_OPT_REALM, optarg);
++                if (e != EMUNGE_SUCCESS) {
++                    log_err (EMUNGE_SNAFU, LOG_ERR,
++                        "Unable to set munge realm name: %s",
++                        munge_ctx_strerror (conf->ctx));
++                }
++                break;
+             case '?':
+                 if (optopt > 0) {
+                     log_err (EMUNGE_SNAFU, LOG_ERR,
+@@ -521,6 +530,9 @@
+     printf ("  %*s %s\n", w, "-S, --socket=STRING",
+             "Specify local domain socket for daemon");
+ 
++    printf ("  %*s %s\n", w, "-R, --realm=STRING",
++            "Overrides default realm");
++
+     printf ("\n");
+     printf ("By default, payload read from stdin, "
+             "credential written to stdout.\n\n");
+diff -uNr munge-0.5.10.ORIG/src/munge/unmunge.c munge-0.5.10/src/munge/unmunge.c
+--- munge-0.5.10.ORIG/src/munge/unmunge.c	2011-01-20 12:54:21.000000000 +1100
++++ munge-0.5.10/src/munge/unmunge.c	2014-05-18 22:56:06.884366412 +1000
+@@ -100,6 +100,7 @@
+     MUNGE_KEY_ENCODE_TIME,
+     MUNGE_KEY_DECODE_TIME,
+     MUNGE_KEY_TTL,
++    MUNGE_KEY_REALM,
+     MUNGE_KEY_CIPHER_TYPE,
+     MUNGE_KEY_MAC_TYPE,
+     MUNGE_KEY_ZIP_TYPE,
+@@ -117,6 +118,7 @@
+     { MUNGE_KEY_ENCODE_TIME,     "ENCODE_TIME"     },
+     { MUNGE_KEY_DECODE_TIME,     "DECODE_TIME"     },
+     { MUNGE_KEY_TTL,             "TTL"             },
++    { MUNGE_KEY_REALM,           "REALM"           },
+     { MUNGE_KEY_CIPHER_TYPE,     "CIPHER"          },
+     { MUNGE_KEY_MAC_TYPE,        "MAC"             },
+     { MUNGE_KEY_ZIP_TYPE,        "ZIP"             },
+@@ -585,6 +587,7 @@
+     int             i;                  /* all-purpose int                   */
+     struct passwd  *pw_ptr;             /* ptr to broken-down password entry */
+     struct group   *gr_ptr;             /* ptr to broken-down group entry    */
++    char           *r_ptr;              /* ptr to realm string               */
+ 
+     if (!conf->fp_meta) {
+         return;
+@@ -671,6 +674,17 @@
+         w = pad - strlen (s);
+         fprintf (conf->fp_meta, "%s:%*c%d\n", s, w, 0x20, i);
+     }
++    if (conf->key[MUNGE_KEY_REALM]) {
++        e = munge_ctx_get (conf->ctx, MUNGE_OPT_REALM, &r_ptr);
++        if (e != EMUNGE_SUCCESS) {
++            log_err (EMUNGE_SNAFU, LOG_ERR,
++                "Unable to retrieve realm: %s",
++                munge_ctx_strerror (conf->ctx));
++        }
++        s = key_val_to_str (MUNGE_KEY_REALM);
++        w = pad - strlen (s);
++        fprintf (conf->fp_meta, "%s:%*c%s\n", s, w, 0x20, r_ptr ? r_ptr : "");
++    }
+     if (conf->key[MUNGE_KEY_CIPHER_TYPE]) {
+         e = munge_ctx_get (conf->ctx, MUNGE_OPT_CIPHER_TYPE, &i);
+         if (e != EMUNGE_SUCCESS) {
+diff -uNr munge-0.5.10.ORIG/src/munged/conf.c munge-0.5.10/src/munged/conf.c
+--- munge-0.5.10.ORIG/src/munged/conf.c	2011-01-20 12:54:21.000000000 +1100
++++ munge-0.5.10/src/munged/conf.c	2014-05-22 15:20:37.246753399 +1000
+@@ -80,6 +80,8 @@
+ #endif /* AUTH_METHOD_RECVFD_MKFIFO || AUTH_METHOD_RECVFD_MKNOD */
+     { "group-check-mtime", required_argument, NULL, '4' },
+     { "group-update-time", required_argument, NULL, '5' },
++    { "default-realm",     required_argument, NULL, '8' },
++    { "realm-key",         required_argument, NULL, '9' },
+     {  NULL,               0,                 NULL,  0  }
+ };
+ 
+@@ -88,6 +90,9 @@
+  *  Internal Prototypes
+  *****************************************************************************/
+ 
++static void _conf_add_realm (const char *name, const char *key);
++static void _conf_add_realm_optarg (char *optarg);
++static void _conf_create_subkeys (conf_t conf, conf_r_t conf_r);
+ static int _conf_open_keyfile (const char *keyfile, int got_force);
+ 
+ 
+@@ -122,10 +127,6 @@
+     conf->def_mac = MUNGE_DEFAULT_MAC;
+     conf->def_ttl = MUNGE_DEFAULT_TTL;
+     conf->max_ttl = MUNGE_MAXIMUM_TTL;
+-    /*
+-     *  FIXME: Add support for default realm.
+-     */
+-    conf->config_name = NULL;
+     if (!(conf->logfile_name = strdup (MUNGED_LOGFILE))) {
+         log_errno (EMUNGE_NO_MEMORY, LOG_ERR,
+             "Cannot dup logfile name string");
+@@ -140,13 +141,7 @@
+     if (!(conf->seed_name = strdup (MUNGED_RANDOM_SEED))) {
+         log_errno (EMUNGE_NO_MEMORY, LOG_ERR, "Cannot dup seed name string");
+     }
+-    if (!(conf->key_name = strdup (MUNGED_SECRET_KEY))) {
+-        log_errno (EMUNGE_NO_MEMORY, LOG_ERR, "Cannot dup key name string");
+-    }
+-    conf->dek_key = NULL;
+-    conf->dek_key_len = 0;
+-    conf->mac_key = NULL;
+-    conf->mac_key_len = 0;
++    conf->realms = NULL;
+     conf->gids = NULL;
+     conf->gids_update_secs = MUNGE_GROUP_UPDATE_SECS;
+     conf->nthreads = MUNGE_THREADS;
+@@ -172,13 +167,11 @@
+ void
+ destroy_conf (conf_t conf)
+ {
++    conf_r_t conf_r = NULL;
++
+     assert (conf != NULL);
+     assert (conf->ld < 0);              /* munge_sock_destroy already called */
+ 
+-    if (conf->config_name) {
+-        free (conf->config_name);
+-        conf->config_name = NULL;
+-    }
+     if (conf->logfile_name) {
+         free (conf->logfile_name);
+         conf->logfile_name = NULL;
+@@ -196,20 +189,6 @@
+         free (conf->seed_name);
+         conf->seed_name = NULL;
+     }
+-    if (conf->key_name) {
+-        free (conf->key_name);
+-        conf->key_name = NULL;
+-    }
+-    if (conf->dek_key) {
+-        memburn (conf->dek_key, 0, conf->dek_key_len);
+-        free (conf->dek_key);
+-        conf->dek_key = NULL;
+-    }
+-    if (conf->mac_key) {
+-        memburn (conf->mac_key, 0, conf->mac_key_len);
+-        free (conf->mac_key);
+-        conf->mac_key = NULL;
+-    }
+     if (conf->auth_server_dir) {
+         free (conf->auth_server_dir);
+         conf->auth_server_dir = NULL;
+@@ -218,12 +197,120 @@
+         free (conf->auth_client_dir);
+         conf->auth_client_dir = NULL;
+     }
++
++    while (conf->realms) {
++        conf_r = conf->realms;
++        if (conf_r->name) {
++            free (conf_r->name);
++            conf_r->name = NULL;
++        }
++        if (conf_r->key_name) {
++            free (conf_r->key_name);
++            conf_r->key_name = NULL;
++        }
++        if (conf_r->dek_key) {
++            memburn (conf_r->dek_key, 0, conf_r->dek_key_len);
++            free (conf_r->dek_key);
++            conf_r->dek_key = NULL;
++        }
++        if (conf_r->mac_key) {
++            memburn (conf_r->mac_key, 0, conf_r->mac_key_len);
++            free (conf_r->mac_key);
++            conf_r->mac_key = NULL;
++        }
++
++        conf->realms = conf_r->next;
++        conf_r->next = NULL;
++        free (conf_r);
++    }
++
+     free (conf);
+ 
+     return;
+ }
+ 
+ 
++conf_r_t
++conf_get_realm (const char *name)
++{
++    conf_r_t r = conf->realms;
++
++    if (name && !name[0]) {
++        /* Empty realm name is the same as the unnamed realm. */
++        name = NULL;
++    }
++
++    while (r) {
++        if ((name && r->name && (0 == strcmp (name, r->name)))
++            || (name == r->name)) {
++            break;
++        }
++        r = r->next;
++    }
++
++    return r;
++}
++
++
++void
++_conf_add_realm (const char *name, const char *key)
++{
++    conf_r_t r = NULL;
++
++    if (conf_get_realm (name)) {
++        log_errno (EMUNGE_BAD_ARG, LOG_ERR,
++            "Duplicate realm: %s", name ? name : "<NULL>");
++    }
++    else if (!(r = malloc (sizeof (struct conf_r)))) {
++        log_errno (EMUNGE_NO_MEMORY, LOG_ERR, "Unable to create realm");
++    }
++
++    memset (r, 0, sizeof *r);
++
++    if (name) {
++        assert (name[0]);
++        if (!(r->name = strdup (name))) {
++            log_errno (EMUNGE_NO_MEMORY, LOG_ERR, "Unable to copy realm name");
++        }
++    }
++
++    assert (key);
++    if (!(r->key_name = strdup (key))) {
++        log_errno (EMUNGE_NO_MEMORY, LOG_ERR, "Unable to copy key name");
++    }
++
++    r->next = conf->realms;
++    conf->realms = r;
++}
++
++
++void
++_conf_add_realm_optarg (char *optarg)
++{
++    char *key;
++
++    key = strchrnul (optarg, ':');
++    if (key[0] != ':' || !key[1]) {
++        log_errno (EMUNGE_BAD_ARG, LOG_ERR,
++            "Realm key name missing");
++    }
++
++    *key = '\0';
++    ++key;
++
++    if (strlen (optarg) < 1) {
++        log_errno (EMUNGE_BAD_ARG, LOG_ERR,
++            "Realm name is missing");
++    }
++    else if (strlen (optarg) > UCHAR_MAX) {
++        log_errno (EMUNGE_BAD_ARG, LOG_ERR,
++            "Realm name is too long");
++    }
++
++    _conf_add_realm (optarg, key);
++}
++
++
+ void
+ parse_cmdline (conf_t conf, int argc, char **argv)
+ {
+@@ -231,6 +318,8 @@
+     int   c;
+     long  l;
+     char *p;
++    char *def_realm = NULL;
++    char *def_key = NULL;
+ 
+     opterr = 0;                         /* suppress default getopt err msgs */
+ 
+@@ -274,11 +363,7 @@
+                 exit (42);
+             /* Begin deprecated cmdline opts */
+             case '0':
+-                if (conf->key_name)
+-                    free (conf->key_name);
+-                if (!(conf->key_name = strdup (optarg)))
+-                    log_errno (EMUNGE_NO_MEMORY, LOG_ERR,
+-                        "Cannot dup key-file name string");
++                def_key = optarg;
+                 break;
+             case '1':
+                 errno = 0;
+@@ -329,6 +414,12 @@
+                 conf->gids_update_secs = l;
+                 break;
+             /* End deprecated cmdline opts */
++            case '8':
++                def_realm = optarg;
++                break;
++            case '9':
++                _conf_add_realm_optarg(optarg);
++                break;
+             case '?':
+                 if (optopt > 0) {
+                     log_err (EMUNGE_SNAFU, LOG_ERR,
+@@ -376,6 +467,13 @@
+         log_err (EMUNGE_SNAFU, LOG_ERR,
+             "Unrecognized parameter \"%s\"", argv[optind]);
+     }
++
++    if (!def_key) {
++        def_key = MUNGED_SECRET_KEY;
++    }
++
++    _conf_add_realm (def_realm, def_key);
++
+     return;
+ }
+ 
+@@ -432,8 +530,14 @@
+             "Specify seconds between group info updates",
+             MUNGE_GROUP_UPDATE_SECS);
+ 
++    printf ("  %*s %s\n", w, "--default-realm=NAME",
++            "Assign a name to the default realm");
++
+     printf ("  %*s %s [%s]\n", w, "--key-file=PATH",
+-            "Specify secret key file", MUNGED_SECRET_KEY);
++            "Specify secret key file for default realm", MUNGED_SECRET_KEY);
++
++    printf ("  %*s %s\n", w, "--realm-key=NAME:PATH",
++            "Adds a new realm with the given key file");
+ 
+     printf ("  %*s %s [%d]\n", w, "--num-threads=INT",
+             "Specify number of threads to spawn", MUNGE_THREADS);
+@@ -447,6 +551,20 @@
+ void
+ create_subkeys (conf_t conf)
+ {
++    conf_r_t r;
++
++    assert (conf != NULL);
++    r = conf->realms;
++    while (r) {
++        _conf_create_subkeys (conf, r);
++        r = r->next;
++    }
++}
++
++
++void
++_conf_create_subkeys (conf_t conf, conf_r_t conf_r)
++{
+     int fd;
+     int n;
+     int n_total;
+@@ -455,28 +573,38 @@
+     md_ctx mac_ctx;
+ 
+     assert (conf != NULL);
+-    assert (conf->dek_key == NULL);
+-    assert (conf->mac_key == NULL);
++    assert (conf_r != NULL);
++    assert (conf_r->dek_key == NULL);
++    assert (conf_r->mac_key == NULL);
++
++    if (conf_r->name) {
++        log_msg (LOG_INFO,
++            "Creating subkeys for realm: %s",
++            conf_r->name);
++    }
++    else {
++        log_msg (LOG_INFO, "Creating subkeys for unnamed realm");
++    }
+ 
+     /*  Allocate memory for subkeys.
+      */
+-    if ((conf->dek_key_len = md_size (MUNGE_MAC_SHA1)) <= 0) {
++    if ((conf_r->dek_key_len = md_size (MUNGE_MAC_SHA1)) <= 0) {
+         log_err (EMUNGE_NO_MEMORY, LOG_ERR,
+             "Unable to determine dek key length");
+     }
+-    if (!(conf->dek_key = malloc (conf->dek_key_len))) {
++    if (!(conf_r->dek_key = malloc (conf_r->dek_key_len))) {
+         log_err (EMUNGE_NO_MEMORY, LOG_ERR,
+             "Unable to allocate %d bytes for cipher subkey",
+-            conf->dek_key_len);
++            conf_r->dek_key_len);
+     }
+-    if ((conf->mac_key_len = md_size (MUNGE_MAC_SHA1)) <= 0) {
++    if ((conf_r->mac_key_len = md_size (MUNGE_MAC_SHA1)) <= 0) {
+         log_err (EMUNGE_NO_MEMORY, LOG_ERR,
+             "Unable to determine mac key length");
+     }
+-    if (!(conf->mac_key = malloc (conf->mac_key_len))) {
++    if (!(conf_r->mac_key = malloc (conf_r->mac_key_len))) {
+         log_err (EMUNGE_NO_MEMORY, LOG_ERR,
+             "Unable to allocate %d bytes for mac subkey",
+-            conf->mac_key_len);
++            conf_r->mac_key_len);
+     }
+     if (md_init (&dek_ctx, MUNGE_MAC_SHA1) < 0) {
+         log_err (EMUNGE_SNAFU, LOG_ERR,
+@@ -484,7 +612,7 @@
+     }
+     /*  Compute keyfile's message digest.
+      */
+-    fd = _conf_open_keyfile (conf->key_name, conf->got_force);
++    fd = _conf_open_keyfile (conf_r->key_name, conf->got_force);
+     assert (fd >= 0);
+ 
+     n_total = 0;
+@@ -496,14 +624,14 @@
+             continue;
+         if (n < 0)
+             log_errno (EMUNGE_SNAFU, LOG_ERR,
+-                "Unable to read keyfile \"%s\"", conf->key_name);
++                "Unable to read keyfile \"%s\"", conf_r->key_name);
+         if (md_update (&dek_ctx, buf, n) < 0)
+             log_err (EMUNGE_SNAFU, LOG_ERR, "Unable to compute subkeys");
+         n_total += n;
+     }
+     if (close (fd) < 0) {
+         log_errno (EMUNGE_SNAFU, LOG_ERR,
+-            "Unable to close keyfile \"%s\"", conf->key_name);
++            "Unable to close keyfile \"%s\"", conf_r->key_name);
+     }
+     if (n_total < MUNGE_MINIMUM_SECRET_KEY_LEN) {
+         log_err (EMUNGE_SNAFU, LOG_ERR,
+@@ -515,23 +643,23 @@
+     }
+     /*  Append "1" to keyfile in order to compute cipher subkey.
+      */
+-    n = conf->dek_key_len;
++    n = conf_r->dek_key_len;
+     if ( (md_update (&dek_ctx, "1", 1) < 0)
+-      || (md_final (&dek_ctx, conf->dek_key, &n) < 0)
++      || (md_final (&dek_ctx, conf_r->dek_key, &n) < 0)
+       || (md_cleanup (&dek_ctx) < 0) ) {
+         log_err (EMUNGE_SNAFU, LOG_ERR, "Unable to compute cipher subkey");
+     }
+-    assert (n <= conf->dek_key_len);
++    assert (n <= conf_r->dek_key_len);
+ 
+     /*  Append "2" to keyfile in order to compute mac subkey.
+      */
+-    n = conf->mac_key_len;
++    n = conf_r->mac_key_len;
+     if ( (md_update (&mac_ctx, "2", 1) < 0)
+-      || (md_final (&mac_ctx, conf->mac_key, &n) < 0)
++      || (md_final (&mac_ctx, conf_r->mac_key, &n) < 0)
+       || (md_cleanup (&mac_ctx) < 0) ) {
+         log_err (EMUNGE_SNAFU, LOG_ERR, "Unable to compute mac subkey");
+     }
+-    assert (n <= conf->mac_key_len);
++    assert (n <= conf_r->mac_key_len);
+ 
+     return;
+ }
+diff -uNr munge-0.5.10.ORIG/src/munged/conf.h munge-0.5.10/src/munged/conf.h
+--- munge-0.5.10.ORIG/src/munged/conf.h	2011-01-20 12:54:21.000000000 +1100
++++ munge-0.5.10/src/munged/conf.h	2014-05-22 15:20:47.161725512 +1000
+@@ -42,6 +42,18 @@
+  *  Data Types
+  *****************************************************************************/
+ 
++struct conf_r {
++    char           *name;               /* realm name                        */
++    char           *key_name;           /* symmetric key filename            */
++    unsigned char  *dek_key;            /* subkey for cipher ops             */
++    int             dek_key_len;        /* length of cipher subkey           */
++    unsigned char  *mac_key;            /* subkey for mac ops                */
++    int             mac_key_len;        /* length of mac subkey              */
++    struct conf_r  *next;               /* next realm record                 */
++};
++
++typedef struct conf_r * conf_r_t;
++
+ struct conf {
+     int             ld;                 /* listening socket descriptor       */
+     unsigned        got_clock_skew:1;   /* flag for allowing clock skew      */
+@@ -55,16 +67,11 @@
+     munge_mac_t     def_mac;            /* default message auth code type    */
+     munge_ttl_t     def_ttl;            /* default time-to-live in seconds   */
+     munge_ttl_t     max_ttl;            /* maximum time-to-live in seconds   */
+-    char           *config_name;        /* configuration filename            */
+     char           *logfile_name;       /* daemon log file name              */
+     char           *pidfile_name;       /* daemon pid file name              */
+     char           *socket_name;        /* unix domain socket filename       */
+     char           *seed_name;          /* random seed filename              */
+-    char           *key_name;           /* symmetric key filename            */
+-    unsigned char  *dek_key;            /* subkey for cipher ops             */
+-    int             dek_key_len;        /* length of cipher subkey           */
+-    unsigned char  *mac_key;            /* subkey for mac ops                */
+-    int             mac_key_len;        /* length of mac subkey              */
++    struct conf_r  *realms;             /* realm records                     */
+     struct in_addr  addr;               /* IPv4 addr in n/w byte order       */
+     gids_t          gids;               /* supplementary group information   */
+     int             gids_update_secs;   /* gids update interval in seconds   */
+@@ -92,6 +99,8 @@
+ 
+ void destroy_conf (conf_t conf);
+ 
++conf_r_t conf_get_realm (const char *name);
++
+ void parse_cmdline (conf_t conf, int argc, char **argv);
+ 
+ void display_help (char *prog);
+diff -uNr munge-0.5.10.ORIG/src/munged/dec.c munge-0.5.10/src/munged/dec.c
+--- munge-0.5.10.ORIG/src/munged/dec.c	2011-01-20 12:54:21.000000000 +1100
++++ munge-0.5.10/src/munged/dec.c	2014-05-22 15:23:00.096470085 +1000
+@@ -67,8 +67,9 @@
+ static int dec_check_retry (munge_cred_t c);
+ static int dec_unarmor (munge_cred_t c);
+ static int dec_unpack_outer (munge_cred_t c);
+-static int dec_decrypt (munge_cred_t c);
+-static int dec_validate_mac (munge_cred_t c);
++static int dec_lookup_realm (munge_cred_t c, conf_r_t *conf_rp);
++static int dec_decrypt (munge_cred_t c, conf_r_t r);
++static int dec_validate_mac (munge_cred_t c, conf_r_t r);
+ static int dec_decompress (munge_cred_t c);
+ static int dec_unpack_inner (munge_cred_t c);
+ static int dec_validate_time (munge_cred_t c);
+@@ -84,6 +85,7 @@
+ dec_process_msg (m_msg_t m)
+ {
+     munge_cred_t c = NULL;              /* aux data for processing this cred */
++    conf_r_t     conf_r = NULL;
+     int          rc = -1;               /* return code                       */
+ 
+     if (dec_validate_msg (m) < 0)
+@@ -100,9 +102,11 @@
+         ;
+     else if (dec_unpack_outer (c) < 0)
+         ;
+-    else if (dec_decrypt (c) < 0)
++    else if (dec_lookup_realm (c, &conf_r) < 0)
+         ;
+-    else if (dec_validate_mac (c) < 0)
++    else if (dec_decrypt (c, conf_r) < 0)
++        ;
++    else if (dec_validate_mac (c, conf_r) < 0)
+         ;
+     else if (dec_decompress (c) < 0)
+         ;
+@@ -528,7 +532,22 @@
+ 
+ 
+ static int
+-dec_decrypt (munge_cred_t c)
++dec_lookup_realm (munge_cred_t c, conf_r_t *conf_rp)
++{
++    m_msg_t m = c->msg;
++
++    assert (conf_rp != NULL);
++    *conf_rp = conf_get_realm ((m->realm_len > 0) ? m->realm_str : NULL);
++    if (!*conf_rp) {
++        return (m_msg_set_err (m, EMUNGE_BAD_REALM, NULL));
++    }
++
++    return (0);
++}
++
++
++static int
++dec_decrypt (munge_cred_t c, conf_r_t conf_r)
+ {
+ /*  Decrypts the "inner" credential data.
+  *
+@@ -571,7 +590,7 @@
+     assert (c->dek_len <= sizeof (c->dek));
+ 
+     n = c->dek_len;
+-    if (mac_block (m->mac, conf->dek_key, conf->dek_key_len,
++    if (mac_block (m->mac, conf_r->dek_key, conf_r->dek_key_len,
+             c->dek, &n, c->mac, c->mac_len) < 0) {
+         return (m_msg_set_err (m, EMUNGE_SNAFU,
+             strdup ("Unable to compute dek")));
+@@ -638,7 +657,7 @@
+ 
+ 
+ static int
+-dec_validate_mac (munge_cred_t c)
++dec_validate_mac (munge_cred_t c, conf_r_t conf_r)
+ {
+ /*  Validates the Message Authentication Code (MAC) over the entire message
+  *    (ie, both "outer" and "inner" data).
+@@ -650,7 +669,7 @@
+ 
+     /*  Compute MAC.
+      */
+-    if (mac_init (&x, m->mac, conf->mac_key, conf->mac_key_len) < 0) {
++    if (mac_init (&x, m->mac, conf_r->mac_key, conf_r->mac_key_len) < 0) {
+         goto err;
+     }
+     if (mac_update (&x, c->outer, c->outer_len) < 0) {
+diff -uNr munge-0.5.10.ORIG/src/munged/enc.c munge-0.5.10/src/munged/enc.c
+--- munge-0.5.10.ORIG/src/munged/enc.c	2011-01-20 12:54:21.000000000 +1100
++++ munge-0.5.10/src/munged/enc.c	2014-05-22 16:45:24.021013904 +1000
+@@ -38,6 +38,7 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <time.h>
++#include <limits.h>
+ #include "auth_recv.h"
+ #include "base64.h"
+ #include "cipher.h"
+@@ -57,7 +58,7 @@
+  *  Static Prototypes
+  *****************************************************************************/
+ 
+-static int enc_validate_msg (m_msg_t m);
++static int enc_validate_msg (m_msg_t m, conf_r_t *conf_rp);
+ static int enc_init (munge_cred_t c);
+ static int enc_authenticate (munge_cred_t c);
+ static int enc_check_retry (munge_cred_t c);
+@@ -65,8 +66,8 @@
+ static int enc_pack_outer (munge_cred_t c);
+ static int enc_pack_inner (munge_cred_t c);
+ static int enc_compress (munge_cred_t c);
+-static int enc_mac (munge_cred_t c);
+-static int enc_encrypt (munge_cred_t c);
++static int enc_mac (munge_cred_t c, conf_r_t conf_r);
++static int enc_encrypt (munge_cred_t c, conf_r_t conf_r);
+ static int enc_armor (munge_cred_t c);
+ static int enc_fini (munge_cred_t c);
+ 
+@@ -79,9 +80,10 @@
+ enc_process_msg (m_msg_t m)
+ {
+     munge_cred_t c = NULL;              /* aux data for processing this cred */
++    conf_r_t     conf_r = NULL;
+     int          rc = -1;               /* return code                       */
+ 
+-    if (enc_validate_msg (m) < 0)
++    if (enc_validate_msg (m, &conf_r) < 0)
+         ;
+     else if (!(c = cred_create (m)))
+         ;
+@@ -99,9 +101,9 @@
+         ;
+     else if (enc_compress (c) < 0)
+         ;
+-    else if (enc_mac (c) < 0)
++    else if (enc_mac (c, conf_r) < 0)
+         ;
+-    else if (enc_encrypt (c) < 0)
++    else if (enc_encrypt (c, conf_r) < 0)
+         ;
+     else if (enc_armor (c) < 0)
+         ;
+@@ -129,7 +131,7 @@
+  *****************************************************************************/
+ 
+ static int
+-enc_validate_msg (m_msg_t m)
++enc_validate_msg (m_msg_t m, conf_r_t *conf_rp)
+ {
+ /*  Validates message types, setting defaults and limits as needed.
+  */
+@@ -186,10 +188,34 @@
+         m->zip = MUNGE_ZIP_NONE;
+     }
+     /*  Validate realm.
+-     *
+-     *  FIXME: Validate realm and set default string if needed.
+-     *         Validate that the realm string is NUL-terminated.
++     *  NB: "m->realm_len" includes terminator
+      */
++    if (m->realm_len == 0) {
++        if (m->realm_str) {
++            return (m_msg_set_err (m, EMUNGE_BAD_REALM,
++                "Realm buffer length mismatch"));
++        }
++        else if (conf->realms->name) {
++            m->realm_str = strdup(conf->realms->name);
++            if (!m->realm_str) {
++                return (m_msg_set_err (m, EMUNGE_NO_MEMORY, NULL));
++            }
++            m->realm_is_copy = 0;
++
++            assert(strlen(m->realm_str) <= UCHAR_MAX);
++            m->realm_len = (uint8_t) strlen(m->realm_str);
++        }
++    }
++    else if (m->realm_str[m->realm_len]) {
++        return (m_msg_set_err (m, EMUNGE_BAD_REALM,
++            "Realm string not terminated"));
++    }
++
++    assert (conf_rp != NULL);
++    if (!(*conf_rp = conf_get_realm (m->realm_str))) {
++        return (m_msg_set_err (m, EMUNGE_BAD_REALM, NULL));
++    }
++
+     /*  Validate time-to-live.
+      *  Ensure it is bounded by the configuration's max ttl.
+      *    A sensible ttl is needed to allow a validated cred's
+@@ -519,7 +545,7 @@
+ 
+ 
+ static int
+-enc_mac (munge_cred_t c)
++enc_mac (munge_cred_t c, conf_r_t conf_r)
+ {
+ /*  Computes the Message Authentication Code (MAC) over the entire message
+  *    (ie, both "outer" and "inner" data).
+@@ -541,7 +567,7 @@
+ 
+     /*  Compute MAC.
+      */
+-    if (mac_init (&x, m->mac, conf->mac_key, conf->mac_key_len) < 0) {
++    if (mac_init (&x, m->mac, conf_r->mac_key, conf_r->mac_key_len) < 0) {
+         goto err;
+     }
+     if (mac_update (&x, c->outer, c->outer_len) < 0) {
+@@ -569,7 +595,7 @@
+ 
+ 
+ static int
+-enc_encrypt (munge_cred_t c)
++enc_encrypt (munge_cred_t c, conf_r_t conf_r)
+ {
+ /*  Encrypts the "inner" credential data.
+  */
+@@ -598,7 +624,7 @@
+     assert (c->dek_len <= sizeof (c->dek));
+ 
+     n = c->dek_len;
+-    if (mac_block (m->mac, conf->dek_key, conf->dek_key_len,
++    if (mac_block (m->mac, conf_r->dek_key, conf_r->dek_key_len,
+             c->dek, &n, c->mac, c->mac_len) < 0) {
+         return (m_msg_set_err (m, EMUNGE_SNAFU,
+             strdup ("Unable to compute dek")));
+diff -uNr munge-0.5.10.ORIG/src/munged/munged.8.in munge-0.5.10/src/munged/munged.8.in
+--- munge-0.5.10.ORIG/src/munged/munged.8.in	2011-01-20 12:54:21.000000000 +1100
++++ munge-0.5.10/src/munged/munged.8.in	2014-05-22 12:20:56.233857870 +1000
+@@ -105,8 +105,14 @@
+ A value of 0 causes it to be computed initially but never updated (unless
+ triggered by a \fBSIGHUP\fR).  A value of \-1 causes it to be disabled.
+ .TP
++.BI "--default-realm " name
++Assigns a name to the default realm.
++.TP
+ .BI "--key-file " file
+-Specify an alternate secret key file.
++Specify an alternate secret key file for the default realm.
++.TP
++.BI "--realm-key " name:file
++Specify a secret key file for the given additional realm.
+ .TP
+ .BI "--num-threads " integer
+ Specify the number of threads to spawn for processing credential requests.
