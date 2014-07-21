@@ -5,7 +5,7 @@
 
 Name:           munge
 Version:        0.5.10
-Release:        1.1%{?dist}
+Release:        1.nci1%{?dist}
 Summary:        Enables uid & gid authentication across a host cluster
 
 Group:          Applications/System
@@ -193,7 +193,7 @@ exit 0
 
 
 %changelog
-* Thu May 22 2014 Chris Allen <chris.allen@anu.edu.au> - 0.5.10-1.1
+* Thu May 22 2014 Chris Allen <chris.allen@anu.edu.au> - 0.5.10-1.nci1
 - Patched to support multiple realms with different keys.
 
 * Sun Feb 27 2011 Steve Traylen <steve.traylen@cern.ch> - 0.5.10-1
